@@ -1,3 +1,5 @@
+# CharmCircle
+
 This is a [Charms](https://charms.dev) app.
 
 It is a simple fungible token managed by a reference NFT. The NFT has a state that specifies the remaining total supply of the tokens available to mint. If you control the NFT, you can mint new tokens.
@@ -36,4 +38,3 @@ prev_txs=02000000000101a3a4c09a03f771e863517b8169ad6c08784d419e6421015e8c360db52
 
 cat ./spells/mint-nft.yaml | envsubst | charms spell check --prev-txs=${prev_txs} --app-bins=${app_bin}
 ```
-# CharmCircle

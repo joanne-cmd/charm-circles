@@ -1,0 +1,56 @@
+version: 8
+
+# ROSCA app and NFT app (for sealed scroll NFT)
+apps:
+    $00: a/${app_id}/${app_vk}
+    $01: n/${app_id}/${app_vk}
+
+# Private inputs: Circle UTXO and contribution UTXO
+private_inputs:
+    $00: "${circle_utxo}"
+    $01: "${contribution_utxo}"
+
+# Inputs: Circle state UTXO and contribution UTXO (with Bitcoin)
+ins:
+    - utxo_id: ${circle_utxo}
+      charms:
+          $00:
+              # Previous CircleState data (public input x)
+              data: ${prev_circle_state_data}
+    - utxo_id: ${contribution_utxo}
+      charms: {}
+
+# Outputs: Updated circle state and sealed scroll NFT
+outs:
+    - address: ${circle_address}
+      charms:
+          $00:
+              # Updated CircleState with contribution recorded
+              # The updated state should have:
+              #   - Same circle_id
+              #   - Updated member's contribution_history with new ContributionRecord:
+              #     * round: ${current_round}
+              #     * amount: ${contribution_amount}
+              #     * timestamp: ${contribution_timestamp}
+              #     * txid: ${txid_hex} (64-char hex string)
+              #   - current_pool: incremented by contribution_amount
+              #   - All other fields unchanged
+              #
+              # Variables:
+              #   - prev_circle_state_data: serialized previous CircleState
+              #   - contributor_pubkey_hex: hex-encoded public key
+              #   - contribution_amount: u64 (satoshis)
+              #   - contribution_timestamp: u64 (Unix timestamp)
+              #   - txid_hex: hex-encoded transaction ID (64 chars)
+              #   - current_round: u32
+              data: ${updated_circle_state_data}
+    - address: ${contributor_address}
+      charms:
+          $01:
+              # Sealed scroll NFT minted as proof of contribution
+              # NFT format: ticker and remaining supply
+              # Variables:
+              #   - nft_ticker: string (e.g., "SEALED_SCROLL" or "ROSCA_CONTRIB")
+              #   - remaining: u64 (supply remaining, typically 1 for unique NFT)
+              ticker: ${nft_ticker}
+              remaining: 1

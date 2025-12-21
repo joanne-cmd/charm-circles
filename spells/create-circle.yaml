@@ -1,0 +1,45 @@
+version: 8
+
+# ROSCA app instance - using 'a/' tag for custom app
+# Format: {tag}/{app_id}/${app_vk}
+# Variables:
+#   - app_id: SHA256 hash of the input UTXO (hex string)
+#   - app_vk: Verification key from 'charms app vk' command
+apps:
+    $00: a/${app_id}/${app_vk}
+
+# Private input: UTXO being spent to create the circle
+# This is the witness data for the transaction
+private_inputs:
+    $00: "${in_utxo_0}"
+
+# Input: UTXO with no charms (new circle creation)
+ins:
+    - utxo_id: ${in_utxo_0}
+      charms: {}
+
+# Output: Circle state stored in app data
+# The CircleState struct will be serialized using CBOR (via charms_data)
+# and stored in the app's data field
+outs:
+    - address: ${circle_address}
+      charms:
+          $00:
+              # CircleState serialized as CBOR-encoded data
+              # The data should be serialized from CircleState struct containing:
+              #   - circle_id: [u8; 32] (hex-encoded: ${circle_id_hex})
+              #   - members: Vec<Member> (initialized with creator as first member)
+              #   - current_round: 0
+              #   - total_rounds: 1 (will increase as members join)
+              #   - contribution_per_round: ${contribution_per_round} (satoshis)
+              #   - current_payout_index: 0
+              #   - current_pool: 0
+              #   - created_at: ${created_at_timestamp} (Unix timestamp)
+              #   - round_started_at: ${created_at_timestamp}
+              #   - round_duration: ${round_duration} (seconds, e.g., 2592000 for 30 days)
+              #   - is_complete: false
+              #   - prev_state_hash: [0u8; 32]
+              #
+              # Serialization: Use Data::from(&circle_state) to create Data from CircleState
+              # The serialized bytes will be stored here (may need hex encoding in YAML)
+              data: ${circle_state_serialized}

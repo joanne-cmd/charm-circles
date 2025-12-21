@@ -1,0 +1,43 @@
+version: 8
+
+# ROSCA app instance
+apps:
+    $00: a/${app_id}/${app_vk}
+
+# Private input: UTXO containing current circle state
+private_inputs:
+    $00: "${circle_utxo}"
+
+# Input: UTXO with existing circle state
+ins:
+    - utxo_id: ${circle_utxo}
+      charms:
+          $00:
+              # Previous CircleState data (serialized as CBOR)
+              # This is the public input (x) passed to app_contract
+              data: ${prev_circle_state_data}
+
+# Output: Updated circle state with new member added
+outs:
+    - address: ${circle_address}
+      charms:
+          $00:
+              # Updated CircleState with new member added
+              # The new state should have:
+              #   - Same circle_id
+              #   - members: previous members + new member
+              #   - total_rounds: incremented by 1
+              #   - New member with:
+              #     * pubkey: ${new_member_pubkey} (33 bytes, hex-encoded)
+              #     * contribution_amount: same as circle's contribution_per_round
+              #     * contribution_history: empty Vec
+              #     * has_received_payout: false
+              #     * payout_round: ${payout_round} (0-indexed)
+              #     * joined_at: ${joined_at_timestamp}
+              #
+              # Variables:
+              #   - prev_circle_state_data: serialized previous CircleState
+              #   - new_member_pubkey_hex: hex-encoded public key (66 chars)
+              #   - payout_round: u32 (0-indexed round number)
+              #   - joined_at_timestamp: u64 (Unix timestamp)
+              data: ${updated_circle_state_data}
