@@ -55,12 +55,64 @@ export class WalletService {
 
     /**
      * Check if UniSat wallet is installed
+     * Also checks for the extension loading asynchronously
      */
     public isWalletInstalled(): boolean {
-        return (
-            typeof window !== "undefined" &&
-            typeof window.unisat !== "undefined"
-        );
+        if (typeof window === "undefined") {
+            return false;
+        }
+
+        // Check if unisat is directly available
+        if (typeof window.unisat !== "undefined") {
+            return true;
+        }
+
+        // Check if it might be loading (some extensions inject later)
+        // We'll also check for common extension injection patterns
+        if (window.document) {
+            // Check if extension might be injecting
+            const hasUniSatScript = Array.from(
+                document.querySelectorAll("script")
+            ).some((script) => script.src && script.src.includes("unisat"));
+            if (hasUniSatScript) {
+                return true; // Extension is likely installed but not yet loaded
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Wait for UniSat wallet to be available (with timeout)
+     * Useful when extension loads asynchronously
+     */
+    public async waitForWallet(timeout: number = 3000): Promise<boolean> {
+        if (this.isWalletInstalled()) {
+            return true;
+        }
+
+        return new Promise((resolve) => {
+            const startTime = Date.now();
+
+            const checkInterval = setInterval(() => {
+                if (this.isWalletInstalled()) {
+                    clearInterval(checkInterval);
+                    resolve(true);
+                } else if (Date.now() - startTime > timeout) {
+                    clearInterval(checkInterval);
+                    resolve(false);
+                }
+            }, 100);
+
+            // Also listen for the extension to inject
+            const originalUnisat = (window as any).unisat;
+            Object.defineProperty(window, "unisat", {
+                get() {
+                    return originalUnisat || (window as any).__unisat__;
+                },
+                configurable: true,
+            });
+        });
     }
 
     /**
@@ -117,6 +169,51 @@ export class WalletService {
      */
     public getAddress(): string | null {
         return this.currentAddress;
+    }
+
+    /**
+     * Get public key from wallet
+     * @returns Public key in hex format (66 characters)
+     */
+    public async getPublicKey(): Promise<string> {
+        if (!this.isWalletInstalled()) {
+            throw new Error("UniSat wallet is not installed");
+        }
+
+        try {
+            console.log("[WALLET] Attempting to get public key from UniSat");
+            console.log("[WALLET] window.unisat available:", !!window.unisat);
+            console.log("[WALLET] getPublicKey method available:", typeof window.unisat?.getPublicKey);
+
+            // First, try to get accounts to ensure wallet is accessible
+            const accounts = await window.unisat!.getAccounts();
+            console.log("[WALLET] Got accounts:", accounts);
+
+            if (!accounts || accounts.length === 0) {
+                throw new Error("No accounts found. Please connect your wallet first.");
+            }
+
+            // Update internal state if we got accounts
+            if (!this.isConnected) {
+                this.isConnected = true;
+                this.currentAddress = accounts[0];
+                console.log("[WALLET] Auto-reconnected to:", this.currentAddress);
+            }
+
+            const publicKey = await window.unisat!.getPublicKey();
+            console.log("[WALLET] Got public key:", publicKey);
+
+            if (!publicKey) {
+                throw new Error("Public key is empty or undefined");
+            }
+
+            return publicKey;
+        } catch (error: any) {
+            console.error("[WALLET] Failed to get public key:", error);
+            throw new Error(
+                `Failed to get public key: ${error.message || "Unknown error"}`
+            );
+        }
     }
 
     /**
@@ -183,7 +280,7 @@ export class WalletService {
 
     /**
      * Sign a PSBT (Partially Signed Bitcoin Transaction)
-     * @param psbt Base64 encoded PSBT
+     * @param psbt Base64 encoded PSBT or hex string
      * @param options Signing options
      * @returns Signed PSBT
      */
@@ -199,7 +296,15 @@ export class WalletService {
             throw new Error("UniSat wallet is not installed");
         }
 
+        // Validate PSBT is not empty
+        if (!psbt || psbt.trim().length === 0) {
+            throw new Error("PSBT is required (psbtHex is required)");
+        }
+
         try {
+            // UniSat expects PSBT as hex string
+            // If it's base64, we might need to convert it
+            // For now, pass it as-is and let UniSat handle it
             const signedPsbt = await window.unisat!.signPsbt(psbt, {
                 autoFinalized: options?.autoFinalized ?? false,
             });
@@ -208,9 +313,14 @@ export class WalletService {
             if (error.code === 4001) {
                 throw new Error("User rejected the signing request");
             }
-            throw new Error(
-                `Failed to sign PSBT: ${error.message || "Unknown error"}`
-            );
+            // Provide more helpful error message
+            const errorMsg = error.message || "Unknown error";
+            if (errorMsg.includes("psbtHex")) {
+                throw new Error(
+                    `Failed to sign PSBT: PSBT format is invalid. Make sure the backend returned a valid PSBT. Error: ${errorMsg}`
+                );
+            }
+            throw new Error(`Failed to sign PSBT: ${errorMsg}`);
         }
     }
 

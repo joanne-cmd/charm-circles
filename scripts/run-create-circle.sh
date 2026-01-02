@@ -4,19 +4,29 @@
 # Change to project root directory
 cd "$(dirname "$0")/.." || exit 1
 
-# Build app binary
+# Bitcoin CLI command (use -testnet4 for testnet, remove for mainnet)
+BTC_CLI="bitcoin-cli -testnet4"
+
+# Load wallet if needed
+if ! ${BTC_CLI} listwallets 2>/dev/null | grep -q "charmcircle-dev"; then
+    echo "Loading wallet..."
+    ${BTC_CLI} loadwallet charmcircle-dev >/dev/null 2>&1 || true
+fi
+
+# Build WASM binary for spell check
+echo "Building WASM binary for spell check..."
 app_bin=$(charms app build 2>&1 | tail -1)
 if [ -z "$app_bin" ] || [ ! -f "$app_bin" ]; then
-    echo "Error: Failed to build app binary or binary not found"
+    echo "Error: Failed to build WASM binary or binary not found"
     echo "Trying alternative path..."
     app_bin="./target/wasm32-wasip1/release/charmcircle.wasm"
     if [ ! -f "$app_bin" ]; then
-        echo "Error: App binary not found at $app_bin"
+        echo "Error: WASM binary not found at $app_bin"
         exit 1
     fi
 fi
 export app_bin
-echo "Using app_bin: ${app_bin}"
+echo "Using WASM app_bin: ${app_bin}"
 
 # Get verification key
 export app_vk=$(charms app vk)
@@ -33,7 +43,7 @@ echo "Fetching transaction: ${txid}"
 
 # Try gettransaction first (for wallet transactions)
 echo "Trying gettransaction (for wallet transactions)..."
-tx_info=$(bitcoin-cli gettransaction "${txid}" 2>&1)
+tx_info=$(${BTC_CLI} gettransaction "${txid}" 2>&1)
 tx_info_error=$?
 
 if [ $tx_info_error -eq 0 ]; then
@@ -56,7 +66,7 @@ if [ -z "$prev_txs" ] || [ "$prev_txs" = "null" ]; then
     echo "Trying getrawtransaction with block hash..."
     
     # Get transaction info to find block hash
-    tx_verbose=$(bitcoin-cli getrawtransaction "${txid}" true 2>&1)
+    tx_verbose=$(${BTC_CLI} getrawtransaction "${txid}" true 2>&1)
     if [ $? -eq 0 ]; then
         if command -v jq &> /dev/null; then
             blockhash=$(echo "${tx_verbose}" | jq -r '.blockhash // empty' 2>/dev/null)
@@ -65,7 +75,7 @@ if [ -z "$prev_txs" ] || [ "$prev_txs" = "null" ]; then
         fi
         if [ -n "$blockhash" ] && [ "$blockhash" != "null" ]; then
             echo "Found block hash: ${blockhash}"
-            prev_txs=$(bitcoin-cli getrawtransaction "${txid}" false "${blockhash}" 2>&1)
+            prev_txs=$(${BTC_CLI} getrawtransaction "${txid}" false "${blockhash}" 2>&1)
             if [ $? -ne 0 ]; then
                 prev_txs=""
             else
@@ -81,7 +91,7 @@ fi
 # If still no luck, try getrawtransaction with -txindex (if available)
 if [ -z "$prev_txs" ] || [ "$prev_txs" = "null" ]; then
     echo "Trying getrawtransaction directly (may require -txindex)..."
-    prev_txs=$(bitcoin-cli getrawtransaction "${txid}" false 2>&1)
+    prev_txs=$(${BTC_CLI} getrawtransaction "${txid}" false 2>&1)
     prev_txs_error=$?
     
     if [ $prev_txs_error -ne 0 ]; then
@@ -138,49 +148,18 @@ export circle_state_serialized=$(./target/release/serialize_state \
 echo "circle_state_serialized length: ${#circle_state_serialized}"
 echo "circle_state_serialized preview: ${circle_state_serialized:0:200}..."
 
-# Get funding UTXO and change address for spell prove
-funding_utxo="${in_utxo_0}"
-
-# Try to get UTXO value from listunspent
-funding_utxo_value=$(bitcoin-cli listunspent | \
-    grep -A5 "${funding_utxo}" | \
-    grep '"amount"' | \
-    sed 's/.*"amount"[[:space:]]*:[[:space:]]*\([0-9.]*\).*/\1/' | \
-    awk '{printf "%.0f", $1 * 100000000}' 2>/dev/null || echo "5000")
-
-if [ -z "$funding_utxo_value" ] || [ "$funding_utxo_value" = "0" ]; then
-    funding_utxo_value="5000"  # Fallback value
-fi
-
-change_address=$(bitcoin-cli getrawchangeaddress 2>/dev/null || echo "${circle_address}")
-
-# Run spell prove (instead of spell check)
+# Run spell check
 echo ""
-echo "Running spell prove (this will generate ZK proof and may take ~5 minutes)..."
-echo "Funding UTXO: ${funding_utxo}"
-echo "Funding value: ${funding_utxo_value} satoshis"
-echo "Change address: ${change_address}"
+echo "Running spell check..."
 echo ""
 
-# Debug: Verify app_bin is set
-if [ -z "${app_bin}" ]; then
-    echo "ERROR: app_bin is empty! Trying to set it manually..."
-    app_bin="./target/wasm32-wasip1/release/charmcircle.wasm"
-    if [ ! -f "${app_bin}" ]; then
-        echo "ERROR: Cannot find app binary at ${app_bin}"
-        exit 1
-    fi
-    export app_bin
-fi
-
-echo "Debug: app_bin = [${app_bin}]"
-echo "Debug: app_bin exists = $([ -f "${app_bin}" ] && echo "yes" || echo "no")"
-echo ""
-
-cat ./spells/create-circle.yaml | envsubst | charms spell prove \
-  --app-bins="${app_bin}" \
+cat ./spells/create-circle.yaml | envsubst | charms spell check \
   --prev-txs="${prev_txs}" \
-  --funding-utxo="${funding_utxo}" \
-  --funding-utxo-value="${funding_utxo_value}" \
-  --change-address="${change_address}"
+  --app-bins="${app_bin}" || {
+    echo ""
+    echo "❌ Spell check failed."
+    echo "Note: If you see a WASI random_get error, this is a known Charms SDK issue."
+    echo ""
+    exit 1
+}
 

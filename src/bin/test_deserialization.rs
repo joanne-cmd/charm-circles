@@ -1,8 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use charmcircle::{CircleState, PubKey};
 #[cfg(not(target_arch = "wasm32"))]
-use ciborium;
-#[cfg(not(target_arch = "wasm32"))]
 use std::env;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -10,8 +8,8 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 6 {
-        eprintln!("Usage: serialize_state <circle_id_hex> <contribution_per_round> <round_duration> <created_at_timestamp> <creator_pubkey_hex>");
-        eprintln!("Example: serialize_state $(openssl rand -hex 32) 100000 2592000 $(date +%s) 023b709e70b6b30177f2e5fd05e43697f0870a4e942530ef19502f8cee07a63281");
+        eprintln!("Usage: test_deserialization <circle_id_hex> <contribution_per_round> <round_duration> <created_at_timestamp> <creator_pubkey_hex>");
+        eprintln!("Example: test_deserialization $(openssl rand -hex 32) 100000 2592000 $(date +%s) 023b709e70b6b30177f2e5fd05e43697f0870a4e942530ef19502f8cee07a63281");
         std::process::exit(1);
     }
 
@@ -57,14 +55,47 @@ fn main() {
         .add_member(creator_pubkey, 0, created_at)
         .expect("Failed to add creator as member");
 
-    // Serialize using ciborium (same as Charms SDK uses internally)
+    // Serialize using ciborium (same as charms_data and CircleState::state_hash use)
     let mut serialized = Vec::new();
     ciborium::ser::into_writer(&circle_state, &mut serialized)
         .expect("Failed to serialize circle state");
 
-    // Output as hex string
-    let serialized_hex = hex::encode(&serialized);
-    println!("{}", serialized_hex);
+    println!("✓ Serialized {} bytes", serialized.len());
+    println!("Serialized hex: {}", hex::encode(&serialized));
+
+    // Now test deserialization
+    println!("\nTesting deserialization...");
+    match ciborium::de::from_reader::<CircleState, _>(&serialized[..]) {
+        Ok(deserialized_state) => {
+            println!("✓ Successfully deserialized!");
+            println!("  Members: {}", deserialized_state.members.len());
+            println!("  Current round: {}", deserialized_state.current_round);
+            println!("  Total rounds: {}", deserialized_state.total_rounds);
+            println!("  Pool: {}", deserialized_state.current_pool);
+
+            match deserialized_state.validate() {
+                Ok(_) => println!("✓ State validation passed!"),
+                Err(e) => {
+                    println!("✗ State validation failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
+
+            // Verify roundtrip
+            if deserialized_state.circle_id == circle_state.circle_id
+                && deserialized_state.members.len() == circle_state.members.len()
+            {
+                println!("✓ Roundtrip test passed!");
+            } else {
+                println!("✗ Roundtrip test failed - data mismatch");
+                std::process::exit(1);
+            }
+        }
+        Err(e) => {
+            println!("✗ Deserialization failed: {}", e);
+            std::process::exit(1);
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]

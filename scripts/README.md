@@ -124,15 +124,8 @@ To get `prev_circle_state_data` for `join-circle` and `contribute`:
 
 ## Common Issues
 
-### `random_get` Error
-All scripts will fail with:
-```
-Error: cannot find definition for import wasi_snapshot_preview1::random_get
-```
-
-**Cause:** `ark-std` (via `charms-sdk`) uses `rand` which requires WASI's `random_get`, but Charms runtime doesn't provide it.
-
-**Solution:** Contact Charms team (see `../DISCORD_MESSAGE_CONCISE.txt`). This is a dependency issue that needs to be fixed at the SDK level.
+### WASI `random_get` Error
+If you see an error about `wasi_snapshot_preview1::random_get`, this is a known issue with the Charms SDK where `ark-std` imports WASI functions that the runtime doesn't provide. This needs to be fixed at the SDK level.
 
 ### Transaction Not Found
 If you get "No such mempool transaction":

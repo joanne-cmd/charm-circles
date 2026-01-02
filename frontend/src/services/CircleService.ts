@@ -22,6 +22,9 @@ export interface CircleInfo {
         hasReceivedPayout: boolean;
         payoutRound: number;
     }>;
+    // Optional fields for display
+    purpose?: string;
+    frequency?: "weekly" | "monthly";
 }
 
 export interface DiscoverCirclesResponse {
@@ -49,17 +52,48 @@ export class CircleService {
             url.searchParams.set("appVk", appVk);
         }
 
-        const response = await fetch(url.toString());
+        try {
+            const response = await fetch(url.toString(), {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(
-                error.error?.message || "Failed to discover circles"
-            );
+            if (!response.ok) {
+                // Try to parse error response
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                    const error = await response.json();
+                    errorMessage = error.error?.message || errorMessage;
+                } catch {
+                    // If JSON parsing fails, use status text
+                }
+
+                // Provide helpful error message
+                if (response.status === 0 || response.status >= 500) {
+                    throw new Error(
+                        `Backend server is not running. Please start it with: ./scripts/start-backend.sh\n\nOriginal error: ${errorMessage}`
+                    );
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const data: DiscoverCirclesResponse = await response.json();
+            return data.data.circles;
+        } catch (error: any) {
+            // Handle network errors (CORS, connection refused, etc.)
+            if (error.name === "TypeError" && error.message.includes("fetch")) {
+                throw new Error(
+                    `Cannot connect to backend server at ${API_BASE_URL}.\n\n` +
+                        `Please make sure the backend is running:\n` +
+                        `  cd server && npm run dev\n\n` +
+                        `Or use: ./scripts/start-backend.sh`
+                );
+            }
+            throw error;
         }
-
-        const data: DiscoverCirclesResponse = await response.json();
-        return data.data.circles;
     }
 
     /**

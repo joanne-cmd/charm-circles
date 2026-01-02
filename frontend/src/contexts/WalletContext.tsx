@@ -13,6 +13,7 @@ interface WalletContextType {
   connect: () => Promise<void>;
   disconnect: () => void;
   refreshBalance: () => Promise<void>;
+  getPublicKey: () => Promise<string>;
   signPSBT: (psbt: string, options?: { autoFinalized?: boolean }) => Promise<string>;
   pushPSBT: (psbt: string) => Promise<string>;
   switchNetwork: (network: 'livenet' | 'testnet') => Promise<void>;
@@ -35,8 +36,36 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   const [balance, setBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletInstalled, setWalletInstalled] = useState<boolean>(false);
 
   const walletService = WalletService.getInstance();
+
+  // Check for wallet installation on mount and periodically
+  useEffect(() => {
+    const checkWallet = async () => {
+      // Initial check
+      const installed = walletService.isWalletInstalled();
+      setWalletInstalled(installed);
+      
+      // If not found, wait a bit for async loading
+      if (!installed) {
+        const found = await walletService.waitForWallet(3000);
+        setWalletInstalled(found);
+      }
+    };
+
+    checkWallet();
+    
+    // Also check periodically in case extension loads later
+    const interval = setInterval(() => {
+      const installed = walletService.isWalletInstalled();
+      if (installed !== walletInstalled) {
+        setWalletInstalled(installed);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [walletInstalled]);
 
   // Check if wallet was previously connected on mount
   useEffect(() => {
@@ -159,7 +188,21 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
   };
 
   const isWalletInstalled = (): boolean => {
-    return walletService.isWalletInstalled();
+    return walletInstalled || walletService.isWalletInstalled();
+  };
+
+  const getPublicKey = async (): Promise<string> => {
+    if (!isConnected) {
+      throw new Error('Wallet is not connected');
+    }
+    try {
+      setError(null);
+      return await walletService.getPublicKey();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to get public key';
+      setError(errorMessage);
+      throw err;
+    }
   };
 
   const value: WalletContextType = {
@@ -171,6 +214,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     connect,
     disconnect,
     refreshBalance,
+    getPublicKey,
     signPSBT,
     pushPSBT,
     switchNetwork,

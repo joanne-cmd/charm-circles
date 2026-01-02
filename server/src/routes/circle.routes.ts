@@ -11,6 +11,13 @@ const circleController = new CircleController();
 router.get("/", circleController.discoverCircles.bind(circleController));
 
 /**
+ * GET /api/circles/utxos/:address
+ * Get UTXOs for an address (for funding transactions)
+ * NOTE: Must come before /:utxo route to avoid route conflicts
+ */
+router.get("/utxos/:address", circleController.getUtxos.bind(circleController));
+
+/**
  * GET /api/circles/:utxo
  * Get circle details by UTXO (format: txid:index)
  */

@@ -18,18 +18,41 @@ export const CircleCard: React.FC<CircleCardProps> = ({
     const isFull = circle.memberCount >= circle.totalRounds;
     const progress = (circle.memberCount / circle.totalRounds) * 100;
     const timeRemaining = circleService.getRoundTimeRemaining(circle);
+    const [showMembers, setShowMembers] = React.useState(false);
+    const [copiedPubkey, setCopiedPubkey] = React.useState<string | null>(null);
+
+    const shortenPubkey = (pubkey: string) => {
+        if (pubkey.length <= 12) return pubkey;
+        return `${pubkey.slice(0, 6)}...${pubkey.slice(-6)}`;
+    };
+
+    const copyToClipboard = (pubkey: string) => {
+        navigator.clipboard.writeText(pubkey);
+        setCopiedPubkey(pubkey);
+        setTimeout(() => setCopiedPubkey(null), 2000);
+    };
 
     return (
         <div className="bg-indigo-deep rounded-lg border border-cyan-accent/20 p-6 hover:border-cyan-accent/40 transition-all">
             {/* Header */}
             <div className="flex justify-between items-start mb-4">
-                <div>
+                <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-cool mb-1">
-                        Circle #{circle.circleId.slice(0, 8)}...
+                        {circle.purpose || `Circle #${circle.circleId.slice(0, 8)}...`}
                     </h3>
-                    <p className="text-sm text-gray-cool/70">
-                        {circle.isComplete ? "Completed" : "Active"}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm text-gray-cool/70">
+                            {circle.isComplete ? "Completed" : "Active"}
+                        </p>
+                        {circle.frequency && (
+                            <>
+                                <span className="text-gray-cool/50">•</span>
+                                <p className="text-sm text-gray-cool/70 capitalize">
+                                    {circle.frequency}
+                                </p>
+                            </>
+                        )}
+                    </div>
                 </div>
                 {!circle.isComplete && (
                     <span className="px-2 py-1 bg-cyan-accent/20 text-cyan-accent text-xs rounded">
@@ -53,6 +76,52 @@ export const CircleCard: React.FC<CircleCardProps> = ({
                     />
                 </div>
             </div>
+
+            {/* Members List */}
+            {circle.members && circle.members.length > 0 && (
+                <div className="mb-4">
+                    <button
+                        type="button"
+                        onClick={() => setShowMembers(!showMembers)}
+                        className="text-sm text-gray-cool/70 hover:text-gray-cool mb-2 flex items-center gap-1"
+                    >
+                        <span>{showMembers ? "▼" : "▶"}</span>
+                        <span>
+                            {showMembers ? "Hide" : "Show"} Members ({circle.members.length})
+                        </span>
+                    </button>
+                    {showMembers && (
+                        <div className="space-y-2 mt-2">
+                            {circle.members.map((member) => (
+                                <div
+                                    key={member.pubkey}
+                                    className="flex items-center justify-between text-xs bg-midnight/50 rounded p-2"
+                                >
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <span className="text-gray-cool/70 flex-shrink-0">
+                                            Round {member.payoutRound}
+                                        </span>
+                                        <code className="text-cyan-accent/80 truncate flex-1">
+                                            {shortenPubkey(member.pubkey)}
+                                        </code>
+                                        {member.hasReceivedPayout && (
+                                            <span className="text-green-success flex-shrink-0">✓</span>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(member.pubkey)}
+                                        className="ml-2 px-2 py-1 text-gray-cool/60 hover:text-cyan-accent transition-colors flex-shrink-0"
+                                        title="Copy full public key"
+                                    >
+                                        {copiedPubkey === member.pubkey ? "✓" : "📋"}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Contribution Amount */}
             <div className="mb-4">
@@ -92,6 +161,12 @@ export const CircleCard: React.FC<CircleCardProps> = ({
                 >
                     {isJoining ? "Joining..." : "Join Circle"}
                 </button>
+            )}
+
+            {!canJoin && !isFull && !circle.isComplete && (
+                <div className="text-xs text-gray-cool/60 text-center py-2">
+                    Connect wallet to join
+                </div>
             )}
 
             {isFull && (

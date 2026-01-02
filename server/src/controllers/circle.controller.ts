@@ -72,4 +72,40 @@ export class CircleController {
             next(error);
         }
     }
+
+    /**
+     * GET /api/circles/utxos/:address
+     * Get UTXOs for an address (for funding transactions)
+     */
+    async getUtxos(
+        req: Request,
+        res: Response,
+        next: NextFunction
+    ): Promise<void> {
+        try {
+            const { address } = req.params;
+
+            if (!address) {
+                throw new AppError("Address is required", 400);
+            }
+
+            // Import BitcoinService
+            const { BitcoinService } = await import(
+                "../services/bitcoin.service"
+            );
+            const bitcoinService = new BitcoinService();
+
+            const utxos = await bitcoinService.getUnspentOutputs(address);
+
+            res.json({
+                success: true,
+                data: {
+                    utxos,
+                    count: utxos.length,
+                },
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
 }

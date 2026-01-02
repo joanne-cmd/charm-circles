@@ -1,7 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 use charmcircle::{CircleState, PubKey};
 #[cfg(not(target_arch = "wasm32"))]
-use serde_cbor;
+use ciborium;
 #[cfg(not(target_arch = "wasm32"))]
 use std::env;
 
@@ -33,7 +33,7 @@ fn main() {
 
             // Deserialize previous state
             let prev_state_bytes = hex::decode(prev_state_hex).expect("Invalid hex for prev_state");
-            let mut state: CircleState = serde_cbor::from_slice(&prev_state_bytes)
+            let mut state: CircleState = ciborium::de::from_reader(&prev_state_bytes[..])
                 .expect("Failed to deserialize previous state");
 
             // Parse new member pubkey
@@ -51,7 +51,9 @@ fn main() {
                 .expect("Failed to add member");
 
             // Serialize updated state
-            let serialized = serde_cbor::to_vec(&state).expect("Failed to serialize updated state");
+            let mut serialized = Vec::new();
+            ciborium::ser::into_writer(&state, &mut serialized)
+                .expect("Failed to serialize updated state");
 
             let serialized_hex = hex::encode(&serialized);
             println!("{}", serialized_hex);
@@ -71,7 +73,7 @@ fn main() {
 
             // Deserialize previous state
             let prev_state_bytes = hex::decode(prev_state_hex).expect("Invalid hex for prev_state");
-            let mut state: CircleState = serde_cbor::from_slice(&prev_state_bytes)
+            let mut state: CircleState = ciborium::de::from_reader(&prev_state_bytes[..])
                 .expect("Failed to deserialize previous state");
 
             // Parse contributor pubkey
@@ -98,7 +100,9 @@ fn main() {
                 .expect("Failed to record contribution");
 
             // Serialize updated state
-            let serialized = serde_cbor::to_vec(&state).expect("Failed to serialize updated state");
+            let mut serialized = Vec::new();
+            ciborium::ser::into_writer(&state, &mut serialized)
+                .expect("Failed to serialize updated state");
 
             let serialized_hex = hex::encode(&serialized);
             println!("{}", serialized_hex);

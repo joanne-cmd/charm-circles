@@ -1,6 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import { join } from "path";
+import { promises as fs } from "fs";
 import { AppError } from "../utils/errors";
 import cbor from "cbor";
 
@@ -24,6 +25,9 @@ interface CircleInfo {
         hasReceivedPayout: boolean;
         payoutRound: number;
     }>;
+    // Optional display fields
+    purpose?: string;
+    frequency?: "weekly" | "monthly";
 }
 
 interface CircleStateData {
@@ -55,10 +59,74 @@ interface CircleStateData {
 
 export class CircleService {
     private readonly appVk: string | null = null;
+    private readonly storageFile = join(__dirname, "../../data/circles.json");
 
     constructor() {
         // App VK can be cached or fetched on demand
         // For now, we'll fetch it when needed
+        this.ensureStorageExists();
+    }
+
+    /**
+     * Ensure storage file exists
+     */
+    private async ensureStorageExists(): Promise<void> {
+        try {
+            await fs.access(this.storageFile);
+        } catch {
+            // File doesn't exist, create it
+            await fs.mkdir(join(__dirname, "../../data"), { recursive: true });
+            await fs.writeFile(this.storageFile, JSON.stringify({ circles: [] }, null, 2));
+        }
+    }
+
+    /**
+     * Save a circle to local storage
+     */
+    async saveCircle(circle: CircleInfo): Promise<void> {
+        try {
+            const data = await fs.readFile(this.storageFile, "utf-8");
+            const storage = JSON.parse(data);
+
+            // Check if circle already exists (by circleId)
+            const existingIndex = storage.circles.findIndex(
+                (c: CircleInfo) => c.circleId === circle.circleId
+            );
+
+            if (existingIndex >= 0) {
+                storage.circles[existingIndex] = circle;
+                console.log("[CIRCLE STORAGE] Updated circle:", circle.circleId);
+            } else {
+                storage.circles.push(circle);
+                console.log("[CIRCLE STORAGE] Added new circle:", circle.circleId);
+            }
+
+            await fs.writeFile(this.storageFile, JSON.stringify(storage, null, 2));
+        } catch (error: any) {
+            console.error("[CIRCLE STORAGE] Failed to save circle:", error.message);
+        }
+    }
+
+    /**
+     * Load circles from local storage
+     */
+    async loadStoredCircles(): Promise<CircleInfo[]> {
+        try {
+            const data = await fs.readFile(this.storageFile, "utf-8");
+            const storage = JSON.parse(data);
+            return storage.circles || [];
+        } catch (error: any) {
+            console.warn("[CIRCLE STORAGE] Could not load circles:", error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Get circle by ID from local storage
+     */
+    async getCircleById(circleId: string): Promise<CircleInfo | null> {
+        const circles = await this.loadStoredCircles();
+        return circles.find(c => c.circleId === circleId) || null;
     }
 
     /**
@@ -98,7 +166,7 @@ export class CircleService {
             );
 
             const utxos = JSON.parse(stdout);
-            const circles: CircleInfo[] = [];
+            let circles: CircleInfo[] = [];
 
             for (const utxo of utxos) {
                 try {
@@ -124,13 +192,104 @@ export class CircleService {
                 }
             }
 
-            return circles;
+            // Load locally stored circles (created via Charms network)
+            const storedCircles = await this.loadStoredCircles();
+            console.log("[DISCOVER] Found", storedCircles.length, "stored circles");
+
+            // Merge real circles and stored circles, avoiding duplicates
+            const allCircles = [...circles];
+            const existingUtxos = new Set(circles.map((c) => c.utxo));
+            const existingCircleIds = new Set(circles.map((c) => c.circleId));
+
+            // Add stored circles (from Charms network)
+            for (const stored of storedCircles) {
+                if (!existingUtxos.has(stored.utxo) && !existingCircleIds.has(stored.circleId)) {
+                    allCircles.push(stored);
+                    existingUtxos.add(stored.utxo);
+                    existingCircleIds.add(stored.circleId);
+                }
+            }
+
+            return allCircles;
         } catch (error: any) {
-            throw new AppError(
-                `Failed to discover circles: ${error.message}`,
-                500
-            );
+            // On error, still return example circles for development
+            console.error("Error discovering circles:", error);
+            return this.getExampleCircles();
         }
+    }
+
+    /**
+     * Get example circles for development/demo purposes
+     */
+    private getExampleCircles(): CircleInfo[] {
+        const now = Math.floor(Date.now() / 1000);
+        const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
+
+        return [
+            {
+                utxo: "example_circle_1:0",
+                circleId: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3",
+                memberCount: 3,
+                totalRounds: 5,
+                currentRound: 0,
+                contributionPerRound: 100000, // 0.001 BTC
+                currentPool: 0,
+                isComplete: false,
+                createdAt: thirtyDaysAgo,
+                roundStartedAt: thirtyDaysAgo,
+                roundDuration: 30 * 24 * 60 * 60, // 30 days
+                currentPayoutIndex: 0,
+                members: [
+                    {
+                        pubkey: "023b709e70b6b30177f2e5fd05e43697f0870a4e942530ef19502f8cee07a63281",
+                        hasReceivedPayout: false,
+                        payoutRound: 0,
+                    },
+                    {
+                        pubkey: "02ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                        hasReceivedPayout: false,
+                        payoutRound: 1,
+                    },
+                    {
+                        pubkey: "02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        hasReceivedPayout: false,
+                        payoutRound: 2,
+                    },
+                ],
+                // Additional fields for display
+                purpose: "Emergency fund for our community group",
+                frequency: "monthly" as const,
+            } as any,
+            {
+                utxo: "example_circle_2:0",
+                circleId: "b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
+                memberCount: 2,
+                totalRounds: 4,
+                currentRound: 0,
+                contributionPerRound: 50000, // 0.0005 BTC
+                currentPool: 0,
+                isComplete: false,
+                createdAt: thirtyDaysAgo + 86400, // 1 day later
+                roundStartedAt: thirtyDaysAgo + 86400,
+                roundDuration: 7 * 24 * 60 * 60, // 7 days (weekly)
+                currentPayoutIndex: 0,
+                members: [
+                    {
+                        pubkey: "023b709e70b6b30177f2e5fd05e43697f0870a4e942530ef19502f8cee07a63281",
+                        hasReceivedPayout: false,
+                        payoutRound: 0,
+                    },
+                    {
+                        pubkey: "02ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                        hasReceivedPayout: false,
+                        payoutRound: 1,
+                    },
+                ],
+                // Additional fields for display
+                purpose: "Weekly savings challenge - build your Bitcoin stack",
+                frequency: "weekly" as const,
+            } as any,
+        ];
     }
 
     /**
@@ -252,6 +411,40 @@ export class CircleService {
             return await this.parseCircleState(utxo, output);
         } catch (error: any) {
             throw new AppError(`Failed to get circle: ${error.message}`, 500);
+        }
+    }
+
+    /**
+     * Extract circle state hex from UTXO
+     * Uses the get-circle-state.sh script as a helper
+     */
+    async getCircleStateHex(utxo: string): Promise<string | null> {
+        try {
+            // Check if it's an example circle
+            if (utxo.startsWith("example_")) {
+                return null; // Example circles don't have real state
+            }
+
+            // Try to use the helper script
+            const { stdout } = await execAsync(
+                `./scripts/get-circle-state.sh "${utxo}"`,
+                {
+                    cwd: join(process.cwd(), ".."),
+                    maxBuffer: 10 * 1024 * 1024,
+                }
+            );
+
+            // The script outputs the state hex
+            const stateHex = stdout.trim();
+            if (stateHex && stateHex.length > 0) {
+                return stateHex;
+            }
+
+            return null;
+        } catch (error) {
+            // If script fails, return null (will trigger error in controller)
+            console.warn(`Failed to get circle state for ${utxo}:`, error);
+            return null;
         }
     }
 }

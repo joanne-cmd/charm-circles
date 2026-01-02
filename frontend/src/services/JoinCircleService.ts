@@ -2,7 +2,6 @@
  * JoinCircleService - Handles joining a circle flow
  */
 
-import { useWallet } from "../contexts/WalletContext";
 import { CircleInfo } from "./CircleService";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
@@ -39,9 +38,11 @@ export class JoinCircleService {
         // Calculate app_id from circle UTXO
         const appId = await this.calculateAppId(params.circle.utxo);
 
-        // Get current circle state data (would need to fetch from UTXO)
-        // For now, we'll need the previous state data - this should come from the circle info
-        const prevCircleStateData = ""; // TODO: Extract from circle UTXO
+        // Get current circle state data
+        // For example circles, we can't get real state, so we'll let the backend handle it
+        // For real circles, the backend should extract it from the UTXO
+        // If the circle has stateData, use it; otherwise let backend fetch it
+        const prevCircleStateData = (params.circle as any).stateData || ""; // Try to get from circle info if available
 
         // Build parameters for join spell
         const spellParams = {
@@ -94,7 +95,7 @@ export class JoinCircleService {
     /**
      * Get previous transaction hex for UTXO
      */
-    private async getPreviousTransaction(utxo: string): Promise<string> {
+    private async getPreviousTransaction(_utxo: string): Promise<string> {
         // This would typically call bitcoin-cli or an indexer API
         // For now, return empty - the backend should handle this
         return "";
@@ -104,7 +105,7 @@ export class JoinCircleService {
      * Get app verification key
      */
     private async getAppVk(): Promise<string> {
-        const response = await fetch(`${API_BASE_URL}/api/spells/templates`);
+        await fetch(`${API_BASE_URL}/api/spells/templates`);
         // App VK should be available from backend or calculated
         // For now, return empty - this should be fetched from backend
         return "";
