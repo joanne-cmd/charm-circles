@@ -505,11 +505,43 @@ export class SpellController {
                 // The transaction is submitted to the Charms network, not regular Bitcoin
                 // Success is indicated by no PROVE credits error
 
-                // For create-circle, save to local storage for demo purposes
+                // For create-circle, save to local storage and extract real UTXO
                 if (templateName === "create-circle" && parameters.circle_id) {
                     try {
+                        // Extract the circle UTXO from the first transaction (commit tx)
+                        let circleUtxo = `charms:${parameters.circle_id}`; // Fallback
+                        let commitTxHex = ""; // Store commit transaction hex
+
+                        if (proveResult.transactions && proveResult.transactions.length > 0) {
+                            commitTxHex = proveResult.transactions[0];
+                            console.log("[BUILD AND PROVE] Extracting UTXO from commit transaction");
+
+                            try {
+                                // Decode the transaction to get its txid
+                                const { exec } = await import("child_process");
+                                const { promisify } = await import("util");
+                                const execAsync = promisify(exec);
+
+                                // Use bitcoin-cli to decode the transaction
+                                const { stdout: decodeOutput } = await execAsync(
+                                    `bitcoin-cli -testnet4 decoderawtransaction "${commitTxHex}"`
+                                );
+
+                                const decodedTx = JSON.parse(decodeOutput);
+                                const commitTxid = decodedTx.txid;
+
+                                // The circle output is at index 0 (first output)
+                                circleUtxo = `${commitTxid}:0`;
+                                console.log("[BUILD AND PROVE] Extracted circle UTXO:", circleUtxo);
+                                txid = commitTxid; // Set txid for response
+                            } catch (decodeError: any) {
+                                console.error("[BUILD AND PROVE] Failed to decode transaction:", decodeError.message);
+                                // Fall back to charms: prefix
+                            }
+                        }
+
                         const circleInfo = {
-                            utxo: `charms:${parameters.circle_id}`, // Placeholder UTXO for Charms network
+                            utxo: circleUtxo,
                             circleId: parameters.circle_id,
                             memberCount: 1, // Creator
                             totalRounds: parameters.max_members ? parseInt(parameters.max_members) : 5,
@@ -528,10 +560,12 @@ export class SpellController {
                             }],
                             purpose: parameters.purpose || "Community Circle",
                             frequency: parameters.round_duration === "604800" ? "weekly" as const : "monthly" as const,
+                            // Store the commit transaction hex for later use in join-circle
+                            commitTxHex: commitTxHex,
                         };
 
                         await this.circleService.saveCircle(circleInfo);
-                        console.log("[BUILD AND PROVE] Saved circle to local storage");
+                        console.log("[BUILD AND PROVE] Saved circle to local storage with UTXO:", circleUtxo);
                     } catch (saveError: any) {
                         console.error("[BUILD AND PROVE] Failed to save circle:", saveError.message);
                         // Don't fail the request if saving fails

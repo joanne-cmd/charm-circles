@@ -140,4 +140,143 @@ export class BitcoinService {
 
         return { txid, vout };
     }
+
+    /**
+     * Get a new address from the wallet
+     * @returns New Bitcoin address
+     */
+    async getNewAddress(): Promise<string> {
+        try {
+            const { stdout } = await execAsync(`${this.btcCli} getnewaddress`);
+            return stdout.trim();
+        } catch (error: any) {
+            const errorMessage = error.stderr || error.stdout || error.message;
+            throw new AppError(
+                `Failed to generate new address: ${errorMessage}`,
+                500
+            );
+        }
+    }
+
+    /**
+     * Send Bitcoin to an address
+     * @param address Destination address
+     * @param amount Amount in BTC
+     * @returns Transaction ID
+     */
+    async sendToAddress(address: string, amount: number): Promise<string> {
+        try {
+            const { stdout } = await execAsync(
+                `${this.btcCli} sendtoaddress "${address}" ${amount}`
+            );
+            return stdout.trim();
+        } catch (error: any) {
+            const errorMessage = error.stderr || error.stdout || error.message;
+            throw new AppError(
+                `Failed to send to address: ${errorMessage}`,
+                500
+            );
+        }
+    }
+
+    /**
+     * Get raw transaction with full details
+     * @param txid Transaction ID
+     * @returns Decoded transaction
+     */
+    async getRawTransaction(txid: string): Promise<any> {
+        try {
+            const { stdout } = await execAsync(
+                `${this.btcCli} getrawtransaction "${txid}" true`
+            );
+            return JSON.parse(stdout);
+        } catch (error: any) {
+            const errorMessage = error.stderr || error.stdout || error.message;
+            throw new AppError(
+                `Failed to get raw transaction: ${errorMessage}`,
+                500
+            );
+        }
+    }
+
+    /**
+     * Get address by index from wallet
+     * @param index Address index
+     * @returns Bitcoin address
+     */
+    async getAddressByIndex(index: number): Promise<string> {
+        try {
+            // List all addresses and get by index
+            const { stdout } = await execAsync(
+                `${this.btcCli} listreceivedbyaddress 0 true`
+            );
+            const addresses = JSON.parse(stdout);
+
+            if (index >= 0 && index < addresses.length) {
+                return addresses[index].address;
+            }
+
+            throw new Error(`Address index ${index} not found`);
+        } catch (error: any) {
+            const errorMessage = error.stderr || error.stdout || error.message;
+            throw new AppError(
+                `Failed to get address by index: ${errorMessage}`,
+                500
+            );
+        }
+    }
+
+    /**
+     * Get public key for an address
+     * @param address Bitcoin address
+     * @returns Public key in hex format
+     */
+    async getPubkeyForAddress(address: string): Promise<string> {
+        try {
+            const { stdout } = await execAsync(
+                `${this.btcCli} getaddressinfo "${address}"`
+            );
+            const info = JSON.parse(stdout);
+
+            if (!info.pubkey) {
+                throw new Error("Public key not found for address");
+            }
+
+            return info.pubkey;
+        } catch (error: any) {
+            const errorMessage = error.stderr || error.stdout || error.message;
+            throw new AppError(
+                `Failed to get pubkey for address: ${errorMessage}`,
+                500
+            );
+        }
+    }
+
+    /**
+     * Get UTXO value in satoshis
+     * @param txid Transaction ID
+     * @param vout Output index
+     * @returns Value in satoshis
+     */
+    async getUtxoValue(txid: string, vout: number): Promise<number> {
+        try {
+            const tx = await this.getRawTransaction(txid);
+
+            if (!tx.vout || !tx.vout[vout]) {
+                throw new Error(`Output ${vout} not found in transaction ${txid}`);
+            }
+
+            const output = tx.vout[vout];
+            // Convert BTC to satoshis
+            const satoshis = Math.round(output.value * 100000000);
+
+            return satoshis;
+        } catch (error: any) {
+            const errorMessage = error.stderr || error.stdout || error.message;
+            throw new AppError(
+                `Failed to get UTXO value: ${errorMessage}`,
+                500
+            );
+        }
+    }
 }

@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { spellRouter } from "./routes/spell.routes";
 import { circleRouter } from "./routes/circle.routes";
+import walletRouter from "./routes/wallet.routes";
 import { errorHandler } from "./middleware/errorHandler";
 
 // Load environment variables
@@ -29,6 +30,7 @@ app.get("/health", (req, res) => {
 // API routes
 app.use("/api/spells", spellRouter);
 app.use("/api/circles", circleRouter);
+app.use("/api/wallet", walletRouter);
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

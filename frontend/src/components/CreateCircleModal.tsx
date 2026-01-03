@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useWallet } from "../contexts/WalletContext";
 import { CreateCircleService, CreateCircleParams } from "../services/CreateCircleService";
+import { AddressSelector } from "./AddressSelector";
 
 interface CreateCircleModalProps {
     isOpen: boolean;
@@ -26,6 +27,8 @@ export const CreateCircleModal: React.FC<CreateCircleModalProps> = ({
     const [contributionFrequency, setContributionFrequency] = useState<ContributionFrequency>("monthly");
     const [contributionAmount, setContributionAmount] = useState<number>(100000); // satoshis
     const [maxMembers, setMaxMembers] = useState<number>(5);
+    const [selectedAddress, setSelectedAddress] = useState<string>("");
+    const [selectedPubkey, setSelectedPubkey] = useState<string>("");
 
     // Reset form when modal opens/closes
     React.useEffect(() => {
@@ -71,21 +74,32 @@ export const CreateCircleModal: React.FC<CreateCircleModalProps> = ({
             setError(null);
             setStep("preparing");
 
-            // Get creator's public key
-            const creatorPubkey = await getPublicKey();
+            // Use selected public key from address selector
+            const creatorPubkey = selectedPubkey || (await getPublicKey());
 
             if (!creatorPubkey) {
                 throw new Error("Failed to get public key from wallet");
             }
 
-            // Get funding UTXO from testnet4 wallet
-            // FRESH UTXO - Just created, never used with Charms
-            let fundingUtxo = "198946f1336e39dca5aa5348859c4795aca979e1c811080cceb4c7dd73b93ea9:1";
-            let fundingUtxoValue = 2000; // 2000 satoshis (0.00002 BTC)
+            // Auto-generate fresh UTXO from backend
+            console.log("[CREATE CIRCLE] Requesting fresh UTXO from backend...");
+            const utxoResponse = await fetch(
+                "http://localhost:3001/api/wallet/utxos/fresh?amount=2000"
+            );
 
-            console.log("[CREATE CIRCLE] Using hardcoded test UTXO:", fundingUtxo);
-            console.log("[CREATE CIRCLE] Final fundingUtxo:", fundingUtxo);
-            console.log("[CREATE CIRCLE] Final fundingUtxoValue:", fundingUtxoValue);
+            if (!utxoResponse.ok) {
+                const errorData = await utxoResponse.json();
+                throw new Error(
+                    errorData.error || "Failed to generate UTXO"
+                );
+            }
+
+            const utxoData = await utxoResponse.json();
+            const fundingUtxo = utxoData.data.utxo;
+            const fundingUtxoValue = utxoData.data.amount;
+
+            console.log("[CREATE CIRCLE] Auto-generated UTXO:", fundingUtxo);
+            console.log("[CREATE CIRCLE] UTXO value:", fundingUtxoValue, "sats");
 
             // Prepare create circle parameters
             const createParams: CreateCircleParams = {
@@ -159,6 +173,17 @@ export const CreateCircleModal: React.FC<CreateCircleModalProps> = ({
                                 placeholder="e.g., Emergency fund for our community, Group savings for a shared goal, Monthly savings challenge..."
                                 className="w-full px-4 py-3 bg-midnight border border-cyan-accent/30 rounded-lg text-gray-cool placeholder-gray-cool/50 focus:outline-none focus:border-cyan-accent resize-none"
                                 rows={4}
+                            />
+                        </div>
+
+                        {/* Address Selector */}
+                        <div>
+                            <AddressSelector
+                                onSelect={(address, pubkey) => {
+                                    setSelectedAddress(address);
+                                    setSelectedPubkey(pubkey);
+                                }}
+                                selectedAddress={selectedAddress}
                             />
                         </div>
 

@@ -96,7 +96,7 @@ export class CircleService {
             if (existingIndex >= 0) {
                 storage.circles[existingIndex] = circle;
                 console.log("[CIRCLE STORAGE] Updated circle:", circle.circleId);
-            } else {
+            } else{
                 storage.circles.push(circle);
                 console.log("[CIRCLE STORAGE] Added new circle:", circle.circleId);
             }
@@ -104,6 +104,49 @@ export class CircleService {
             await fs.writeFile(this.storageFile, JSON.stringify(storage, null, 2));
         } catch (error: any) {
             console.error("[CIRCLE STORAGE] Failed to save circle:", error.message);
+        }
+    }
+
+    /**
+     * Add member to circle
+     */
+    async addMemberToCircle(
+        circleId: string,
+        pubkey: string,
+        payoutRound: number
+    ): Promise<void> {
+        try {
+            const data = await fs.readFile(this.storageFile, "utf-8");
+            const storage = JSON.parse(data);
+
+            const circleIndex = storage.circles.findIndex(
+                (c: CircleInfo) => c.circleId === circleId
+            );
+
+            if (circleIndex < 0) {
+                throw new Error(`Circle ${circleId} not found`);
+            }
+
+            const circle = storage.circles[circleIndex];
+
+            // Add new member
+            circle.members.push({
+                pubkey,
+                hasReceivedPayout: false,
+                payoutRound,
+            });
+
+            // Update member count
+            circle.memberCount = circle.members.length;
+
+            // Save updated circle
+            storage.circles[circleIndex] = circle;
+            await fs.writeFile(this.storageFile, JSON.stringify(storage, null, 2));
+
+            console.log("[CIRCLE STORAGE] Added member to circle:", circleId);
+        } catch (error: any) {
+            console.error("[CIRCLE STORAGE] Failed to add member:", error.message);
+            throw error;
         }
     }
 
@@ -399,6 +442,16 @@ export class CircleService {
      */
     async getCircleByUtxo(utxo: string): Promise<CircleInfo | null> {
         try {
+            // First, check if this circle exists in local storage
+            const circles = await this.loadStoredCircles();
+            const storedCircle = circles.find(c => c.utxo === utxo);
+
+            if (storedCircle) {
+                console.log("[CIRCLE SERVICE] Found circle in local storage:", utxo);
+                return storedCircle;
+            }
+
+            // If not found locally, try to fetch from blockchain
             const [txid, voutStr] = utxo.split(":");
             const vout = parseInt(voutStr, 10);
 

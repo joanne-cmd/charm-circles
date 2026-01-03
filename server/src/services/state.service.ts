@@ -170,4 +170,58 @@ export class StateService {
             );
         }
     }
+
+    /**
+     * Get circle state for a given UTXO
+     * This retrieves the stored state from CircleService and reconstructs it
+     */
+    async getCircleState(utxo: string): Promise<string> {
+        try {
+            // Import CircleService
+            const { CircleService } = await import("./circle.service");
+            const circleService = new CircleService();
+
+            let circle = null;
+
+            // Check if this is a locally stored circle (charms: prefix)
+            if (utxo.startsWith("charms:")) {
+                // Extract circle ID from charms:circleId format
+                const circleId = utxo.replace("charms:", "");
+                circle = await circleService.getCircleById(circleId);
+            } else {
+                // Real Bitcoin UTXO - fetch from blockchain
+                circle = await circleService.getCircleByUtxo(utxo);
+            }
+
+            if (!circle) {
+                throw new Error(`Circle not found for UTXO: ${utxo}`);
+            }
+
+            // Recreate state from stored circle
+            const stateHex = await this.createCircleStateFromStored(circle);
+            return stateHex;
+        } catch (error: any) {
+            throw new AppError(
+                `Failed to get circle state: ${error.message}`,
+                500
+            );
+        }
+    }
+
+    /**
+     * Add member to state (wrapper around addMember for easier use)
+     */
+    async addMemberToState(
+        prevState: string,
+        newMemberPubkey: string,
+        payoutRound: number,
+        joinedAt: number
+    ): Promise<string> {
+        return this.addMember({
+            prevState,
+            newMemberPubkey,
+            payoutRound,
+            joinedAt,
+        });
+    }
 }

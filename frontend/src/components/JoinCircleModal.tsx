@@ -55,41 +55,35 @@ export const JoinCircleModal: React.FC<JoinCircleModalProps> = ({
                 throw new Error(`Invalid public key format. Got: ${userPubkey ? userPubkey.length : 0} characters, expected 66`);
             }
 
-            // Prepare join parameters
-            // Note: These would need to be fetched/calculated:
-            // - fundingUtxo: UTXO to fund the transaction
-            // - fundingUtxoValue: Value of funding UTXO
-            // - changeAddress: Address for change output
-            // - circleAddress: Address where circle state is stored
+            // Fetch a fresh UTXO from the backend wallet
+            // The backend will generate a new UTXO with the required amount
+            const requiredAmount = circle.contributionPerRound + 2000; // contribution + tx fee buffer
+            const utxoResponse = await fetch(`http://localhost:3001/api/wallet/utxos/fresh?amount=${requiredAmount}`);
 
-            // Use a real UTXO for join transaction from testnet4 wallet
-            // Real Bitcoin testnet4 UTXO (confirmed, unspent)
-            let fundingUtxo = "e9512c7a285fdf101aa2ea110eeefd308c163a6a546f86eb4f0618090c3200ec:0";
-            let fundingUtxoValue = 56689; // 56689 satoshis (0.00056689 BTC)
+            if (!utxoResponse.ok) {
+                throw new Error("Failed to get funding UTXO from wallet");
+            }
+
+            const utxoData = await utxoResponse.json();
+            const fundingUtxo = utxoData.data.utxo;
 
             const params: JoinCircleParams = {
-                circle,
-                newMemberPubkey: userPubkey,
-                payoutRound,
-                circleAddress: address, // Use wallet address as circle address
+                circleId: circle.circleId,
+                joinerPubkey: userPubkey,
                 fundingUtxo,
-                fundingUtxoValue,
                 changeAddress: address,
             };
 
-            // Step 1: Prepare and submit to Charms network via backend
-            // The backend runs charms spell prove which submits to Charms network
+            // Join the circle via backend API
             setStep("broadcasting");
-            const response = await joinService.prepareJoinCircle(params);
+            const response = await joinService.joinCircle(params);
 
             console.log("[JOIN CIRCLE] Backend response:", response);
 
-            // For Charms transactions, success means no PROVE credits error
-            // Charms doesn't return a txid like Bitcoin does
-            if (response.psbt && response.psbt.length > 0) {
-                console.log("[JOIN CIRCLE] Transaction generated and submitted to Charms network");
-                // Set a placeholder txid to indicate success
-                setTxid("Submitted to Charms network");
+            // Success - transaction was created and submitted
+            if (response.transaction && response.transaction.length > 0) {
+                console.log("[JOIN CIRCLE] Successfully joined circle");
+                setTxid(response.transaction);
                 setStep("success");
             } else {
                 throw new Error("Backend did not return transaction data. Check server logs for details.");

@@ -23,4 +23,10 @@ router.get("/utxos/:address", circleController.getUtxos.bind(circleController));
  */
 router.get("/:utxo", circleController.getCircle.bind(circleController));
 
+/**
+ * POST /api/circles/:circleId/join
+ * Join an existing circle
+ */
+router.post("/:circleId/join", circleController.joinCircle.bind(circleController));
+
 export { router as circleRouter };
