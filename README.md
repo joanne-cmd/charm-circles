@@ -63,23 +63,6 @@ CharmCircle enables groups to create trustless savings circles on Bitcoin where:
 - **Wallet**: UniSat (browser extension)
 - **Network**: Bitcoin testnet4
 
-## Quick Start
-
-### Prerequisites
-
-```bash
-# Rust toolchain with WASM target
-rustup target add wasm32-wasip1
-
-# Charms CLI
-npm install -g @charms/cli
-
-# Bitcoin Core (testnet4)
-# Download from bitcoin.org
-
-# Node.js 18+
-# Download from nodejs.org
-```
 
 ### Installation
 
@@ -149,40 +132,6 @@ Test the core functionality using CLI scripts:
 ./scripts/run-contribute.sh
 ```
 
-See [scripts/TESTING_GUIDE.md](scripts/TESTING_GUIDE.md) for detailed testing instructions.
-
-## Project Structure
-
-```
-charmcircle/
-├── src/
-│   ├── lib.rs              # WASM smart contract
-│   └── bin/
-│       ├── serialize_state.rs    # State serialization helper
-│       └── update_state.rs       # State update helper
-├── spells/
-│   ├── create-circle.yaml  # Create circle spell template
-│   ├── join-circle.yaml    # Join circle spell template
-│   └── contribute.yaml     # Contribution spell template
-├── server/
-│   ├── src/
-│   │   ├── controllers/    # API endpoints
-│   │   ├── services/       # Business logic
-│   │   └── types/          # TypeScript types
-│   └── package.json
-├── frontend/
-│   ├── src/
-│   │   ├── components/     # React components
-│   │   ├── services/       # API clients
-│   │   └── contexts/       # React contexts
-│   └── package.json
-├── scripts/                # Testing/deployment scripts
-├── docs/                   # Documentation
-│   └── VALIDATION_ISSUES.md  # Technical deep-dive
-├── KNOWN_ISSUES.md         # Known limitations
-└── README.md               # This file
-```
-
 ## Documentation
 
 - **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Known limitations and future work
@@ -190,11 +139,9 @@ charmcircle/
 - **[scripts/TESTING_GUIDE.md](scripts/TESTING_GUIDE.md)** - Testing instructions
 - **[scripts/WALLET_SETUP.md](scripts/WALLET_SETUP.md)** - Wallet configuration
 
-## Development Status
 
-This is a **hackathon project** demonstrating ROSCA functionality on Bitcoin using Charms SDK.
 
-### Current State (Hackathon Version)
+### Current State 
 
 ✅ **Working Features**:
 - Circle creation with configurable parameters
@@ -237,59 +184,6 @@ See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for details.
 4. **Wallet**: User signs PSBT with UniSat
 5. **Network**: Transaction broadcasts to Bitcoin testnet4
 
-### Circle State
-
-```rust
-pub struct CircleState {
-    pub circle_id: [u8; 32],           // Unique identifier
-    pub contribution_per_round: u64,    // Sats per round
-    pub round_duration: u64,            // Seconds per round
-    pub created_at: u64,                // Unix timestamp
-    pub current_round: u64,             // Current round number
-    pub members: Vec<Member>,           // List of members
-}
-```
-
-State is serialized using CBOR and stored in Bitcoin UTXO charm data.
-
-### Validation Layers
-
-1. **WASM Contract** (on-chain):
-   - Validates charm data exists
-   - Future: Full CircleState validation
-
-2. **Backend Service** (off-chain):
-   - Deserializes and validates state structure
-   - Enforces ROSCA business rules
-   - Generates valid state transitions
-
-See [docs/VALIDATION_ISSUES.md](docs/VALIDATION_ISSUES.md) for technical details.
-
-## API Endpoints
-
-### Backend Server (port 3001)
-
-```
-POST /api/spells/build-and-prove
-  - Builds and proves a spell
-  - Returns PSBT for signing
-
-GET /api/circles/:circleId
-  - Gets circle state
-  - Returns decoded CircleState
-
-POST /api/circles/create
-  - Creates new circle
-  - Returns circle_id and PSBT
-
-POST /api/circles/:circleId/join
-  - Joins existing circle
-  - Returns updated state PSBT
-```
-
-## Building & Testing
-
-### Build WASM Contract
 
 ```bash
 # Build WASM binary
@@ -309,12 +203,7 @@ cargo test
 # Test state serialization
 cargo build --release --bin serialize_state
 ./target/release/serialize_state \
-  $(openssl rand -hex 32) \
-  100000 \
-  2592000 \
-  $(date +%s) \
-  <pubkey_hex>
-```
+
 
 ### Verify Spell
 
@@ -329,58 +218,3 @@ export in_utxo_0="<your_utxo>"
 cat spells/create-circle.yaml | envsubst | \
   charms spell check --prev-txs="${prev_txs}" --app-bins="${app_bin}"
 ```
-
-## Contributing
-
-This is a hackathon project, but contributions are welcome!
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## Troubleshooting
-
-### Common Issues
-
-**Problem**: "No wallet is loaded"
-```bash
-# Solution: Load Bitcoin Core wallet
-bitcoin-cli -testnet4 loadwallet charmcircle-dev
-```
-
-**Problem**: "Failed to sign PSBT: invalid psbt"
-```bash
-# Solution: Ensure UTXO has witness data
-# Backend automatically runs utxoupdatepsbt
-```
-
-**Problem**: "insufficient balance X PROVE for request cost Y PROVE"
-```bash
-# Solution: Request more PROVE credits from Charms Discord
-# This is a network resource token for testnet
-```
-
-See [docs/VALIDATION_ISSUES.md](docs/VALIDATION_ISSUES.md) for detailed troubleshooting.
-
-## Resources
-
-- [Charms SDK Documentation](https://charms.dev/docs)
-- [Bitcoin Testnet4 Faucet](https://mempool.space/testnet4/faucet)
-- [UniSat Wallet](https://unisat.io)
-- [BRO Token Reference Implementation](https://github.com/CharmsDev/bro)
-
-## License
-
-[Your chosen license - e.g., MIT]
-
-## Acknowledgments
-
-- Built with [Charms SDK](https://charms.dev)
-- Inspired by traditional ROSCA community savings models
-- Created for [Hackathon Name] - January 2026
-
----
-
-**Note**: This is a hackathon demonstration project. Not audited for production use. Use at your own risk on mainnet.
