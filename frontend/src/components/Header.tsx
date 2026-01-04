@@ -51,7 +51,6 @@ export const Header: React.FC = () => {
           {/* Logo/Brand */}
           <div className="flex items-center">
             <h1 className="text-2xl font-bold text-gray-cool">CharmCircle</h1>
-            <span className="ml-2 text-sm text-gray-cool/70">Bitcoin ROSCA</span>
           </div>
 
           {/* Wallet Connection Section */}
