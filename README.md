@@ -87,42 +87,102 @@ cargo build --release --bin update_state
 
 ### Running the Application
 
-#### 1. Start Bitcoin Core (testnet4)
+Follow these steps in order to run CharmCircle:
+
+#### Step 1: Start Bitcoin Core (testnet4)
 
 ```bash
+# Start Bitcoin daemon on testnet4
 bitcoind -testnet4 -daemon
+
+# Wait a few seconds for bitcoind to start, then load wallet
 bitcoin-cli -testnet4 loadwallet charmcircle-dev
+
+# Verify wallet is loaded
+bitcoin-cli -testnet4 listwallets
 ```
 
-#### 2. Start Backend Server
+**Note**: If you don't have a wallet yet, create one first:
+```bash
+bitcoin-cli -testnet4 createwallet charmcircle-dev
+```
+
+#### Step 2: Initialize Circle (First Time Setup)
+
+**IMPORTANT**: Before starting the backend server for the first time, you need to run the circle initialization script. This validates your Charms setup and prepares the spell templates.
+
+```bash
+# Make script executable (first time only)
+chmod +x ./scripts/run-create-circle.sh
+
+# Run the initialization script
+./scripts/run-create-circle.sh
+```
+
+This script will:
+- Build the WASM binary
+- Generate verification keys
+- Validate your Charms CLI installation
+- Test spell checking with your Bitcoin node
+- Ensure everything is configured correctly
+
+**Expected Output**: You should see "Spell check passed" or similar success message.
+
+#### Step 3: Start Backend Server
+
+Now that the circle is initialized, start the backend:
 
 ```bash
 cd server
 npm run dev
-# Runs on http://localhost:3001
 ```
 
-#### 3. Start Frontend
+The backend will run on `http://localhost:3001`
+
+**Backend Functions**:
+- Handles circle creation and member joining
+- Generates Charms spell proofs
+- Manages CBOR state serialization
+- Communicates with Bitcoin Core RPC
+
+#### Step 4: Start Frontend
+
+In a new terminal window:
 
 ```bash
 cd frontend
 npm run dev
-# Runs on http://localhost:5173
 ```
 
-#### 4. Connect UniSat Wallet
+The frontend will run on `http://localhost:5173`
+
+#### Step 5: Connect UniSat Wallet
 
 1. Install [UniSat Wallet](https://unisat.io) browser extension
-2. Switch to testnet4 network
-3. Get testnet coins from a faucet
-4. Connect wallet in the CharmCircle UI
+2. Open UniSat and switch to **testnet4** network
+3. Get testnet coins from a faucet (if needed):
+   - https://mempool.space/testnet4/faucet
+4. Open `http://localhost:5173` in your browser
+5. Click "Connect Wallet" and approve the connection
 
-### Testing Scripts
+### Testing the Full Flow
 
-Test the core functionality using CLI scripts:
+Once everything is running, test the complete circle flow:
+
+#### Option 1: Using the Web UI
+1. Open `http://localhost:5173`
+2. Click "Create Circle"
+3. Fill in circle details (contribution amount, frequency, max members)
+4. Sign transaction with UniSat wallet
+5. View your circle on the dashboard
+6. Share the `circle_id` with others to join
+
+#### Option 2: Using CLI Scripts
+
+Test core functionality directly via command line:
 
 ```bash
-# Create a new circle
+# Create a new circle (already done in Step 2)
 ./scripts/run-create-circle.sh
 
 # Join an existing circle
@@ -130,6 +190,25 @@ Test the core functionality using CLI scripts:
 
 # Make a contribution
 ./scripts/run-contribute.sh
+```
+
+### Quick Start Summary
+
+```bash
+# Terminal 1: Bitcoin Node
+bitcoind -testnet4 -daemon
+bitcoin-cli -testnet4 loadwallet charmcircle-dev
+
+# Terminal 1: Initialize (first time only)
+./scripts/run-create-circle.sh
+
+# Terminal 2: Backend
+cd server && npm run dev
+
+# Terminal 3: Frontend
+cd frontend && npm run dev
+
+# Browser: Open http://localhost:5173 and connect UniSat wallet
 ```
 
 ## Documentation
