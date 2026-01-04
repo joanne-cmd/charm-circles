@@ -135,6 +135,9 @@ Now that the circle is initialized, start the backend:
 ```bash
 cd server
 npm run dev
+
+or
+./scripts/start-backend.sh
 ```
 
 The backend will run on `http://localhost:3001`
@@ -183,13 +186,11 @@ Test core functionality directly via command line:
 
 ```bash
 # Create a new circle (already done in Step 2)
-./scripts/run-create-circle.sh
+./scripts/test-create-circle-api.sh
 
 # Join an existing circle
-./scripts/run-join-circle.sh
+./scripts/test-join-circle-api.sh
 
-# Make a contribution
-./scripts/run-contribute.sh
 ```
 
 ### Quick Start Summary
